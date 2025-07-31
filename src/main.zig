@@ -17,13 +17,15 @@ const stdout = std.io.getStdOut().writer();
 
 fn usage() u8 {
     std.debug.print("Usage: vfs <pattern> <function-name> [...ARG_TYPE]\n\n", .{});
-    std.debug.print("Examples\n", .{});
+    std.debug.print("Examples\n\n", .{});
     std.debug.print("# Will return a function mintXX() (where 'XX' is the brute-forced suffix) that has a selector starting with 0xaa\n", .{});
-    std.debug.print("$ vfs 0xaa mint\n", .{});
-    std.debug.print("# Use the character 'x' as a wildcard. The following is equivalent to just 0xaa", .{});
-    std.debug.print("$ vfs 0xaaxxxxxx mint\n", .{});
+    std.debug.print("$ vfs 0xaa mint\n\n", .{});
+    std.debug.print("# Use the character 'x' as a wildcard. The following is equivalent to just 0xaa\n", .{});
+    std.debug.print("$ vfs 0xaaxxxxxx mint\n\n", .{});
+    std.debug.print("# You can pass function argument types as subsequent arguments\n", .{});
     std.debug.print("$ vfs 0xf0f0 bridge address address uint256\n\n", .{});
-    std.debug.print("$ vfs 0xf0f0 bridge address address uint256\n\n", .{});
+    std.debug.print("# Or as a single argument if you have complex types like tuples or structs\n", .{});
+    std.debug.print("$ vfs 0x00 swap \"(address,address,uint256[]),(address,address,uint256[])\"\n\n", .{});
     return 1;
 }
 
@@ -47,7 +49,7 @@ pub fn main() u8 {
     }
     var buffer: [BUF_SIZE]u8 = undefined;
     const args_str = flattenArgs(args[3..], &buffer);
-    print("Computing... Looking for a suffix for function {s}({s}) to get a signature matching pattern {s}\n", .{
+    print("Computing... Looking for a suffix for function {s}({s}) to get a signature matching pattern {s:x<10}\n", .{
         fct_name,
         args_str,
         pattern_str,
