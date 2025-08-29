@@ -1,18 +1,13 @@
-// src/gvfs_metal.h
 #pragma once
 #include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef struct gvfs_ctx gvfs_ctx;
 
 typedef struct {
-    uint32_t found;      // 0/1
-    uint32_t selector;   // big-endian display (like cast)
-    uint32_t suffix_len; // <= 32
-    char     suffix[32]; // raw chars, not 0-terminated if full
+  uint32_t found;      // 0/1
+  uint32_t selector;   // big-endian display (like cast)
+  uint32_t suffix_len; // <= 32
+  char     suffix[32]; // raw chars, not 0-terminated if full
 } gvfs_result;
 
 // Create a GPU context and load the metallib + kernel.
@@ -37,7 +32,3 @@ int gvfs_search_batch(
     uint64_t start_index, uint64_t batch_count,
     gvfs_result* out
 );
-
-#ifdef __cplusplus
-}
-#endif

@@ -7,7 +7,8 @@ pub fn printError(err: VFSError) void {
         switch (err) {
             VFSError.ParseError => "Parse Error",
             VFSError.DifficultyTooHigh => "Difficulty must be between 1 and 4",
-            VFSError.PatternTooLong => "The pattern cannot be longer than 4 bytes (\"0x\" followed by 8 hex digits)"
+            VFSError.PatternTooLong => "The pattern cannot be longer than 4 bytes (\"0x\" followed by 8 hex digits)",
+            VFSError.NotFound => "Unknown Error",
         }
     });
 }

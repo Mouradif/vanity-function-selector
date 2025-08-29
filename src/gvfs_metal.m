@@ -1,4 +1,3 @@
-// src/gvfs_metal.m
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import "gvfs_metal.h"

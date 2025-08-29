@@ -1,20 +1,12 @@
 const std = @import("std");
 const lib = @import("root.zig");
 const utils = @import("utils.zig");
-const C = @import("constants.zig");
+const Constants = @import("constants.zig");
 
 const VFSError = lib.VFSError;
 const BitMasks = lib.BitMasks;
 
-const printError = utils.printError;
-const isFunctionNameIsValid = utils.isFunctionNameIsValid;
-const strlen = utils.strlen;
-const toStringWithMaxLength = utils.toStringWithMaxLength;
-const isHexString = utils.isHexString;
-const flattenArgs = utils.flattenArgs;
-
-const BUF_SIZE = 2048;
-var stdout_buffer: [BUF_SIZE]u8 = undefined;
+var stdout_buffer: [Constants.BUF_SIZE]u8 = undefined;
 var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
 const stdout = &stdout_writer.interface;
 
@@ -41,34 +33,25 @@ pub fn main() u8 {
     const args = std.os.argv;
     if (args.len < 3) return usage();
 
-    const pattern_str = toStringWithMaxLength(args[1], 11);
+    const pattern_str = utils.toStringWithMaxLength(args[1], 11);
     const pattern = BitMasks.fromPattern(pattern_str) catch |e| {
-            printError(e);
+            utils.printError(e);
             return 1;
     };
-    const fct_name = toStringWithMaxLength(args[2], 64);
-    if (!isFunctionNameIsValid(fct_name)) {
+    const fct_name = utils.toStringWithMaxLength(args[2], 64);
+    if (!utils.isFunctionNameIsValid(fct_name)) {
         std.debug.print("Invalid function name {s}\n", .{args[2]});
         return 2;
     }
-    var buffer: [BUF_SIZE]u8 = undefined;
-    const args_str = flattenArgs(args[3..], &buffer);
-    print("Computing... Looking for a suffix for function {s}({s}) to get a signature matching pattern {s:x<10}\n", .{
+    var args_buffer: [Constants.MAX_FQFN_LEN]u8 = undefined;
+    const args_str = utils.flattenArgs(args[3..], &args_buffer);
+    print("Computing... Looking for a suffix for function {s}<suffix>({s}) to get a signature matching pattern {s:x<10}\n", .{
         fct_name,
         args_str,
         pattern_str,
     });
-    var result_buf: [C.MAX_FQFN_LEN]u8 = undefined;
-    const gpu_res = lib.searchByPatternGPU(&result_buf, pattern, fct_name, args_str);
-    if (gpu_res) |r| {
-        print("Found (GPU) suffix: \"{s}\" after ~{d} attempts\n", .{ r.suffix, r.attempts });
-        print("0x{x:0>8}: {s}\n", .{ r.pattern, r.name });
-        return 0;
-    }
-
-    // Fallback to CPU
-    const result = lib.searchByPattern(pattern, fct_name, args_str);
-    print("Found (CPU) suffix: \"{s}\" after {d} attempts\n", .{ result.suffix, result.attempts });
-    print("0x{x:0>8}: {s}\n", .{ result.pattern, result.name });
+    const result = lib.searchByPatternGPU(pattern, fct_name, args_str) catch lib.searchByPattern(pattern, fct_name, args_str);
+    print("Found suffix: \"{s}\" after {d} attempts\n", .{ result.suffix[0..result.suffix_len], result.attempts });
+    print("0x{x:0>8}: {s}\n", .{ result.pattern, result.name[0..result.name_len] });
     return 0;
 }
