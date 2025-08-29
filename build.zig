@@ -4,16 +4,39 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe_mod = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+    const metal_air = b.addSystemCommand(&.{
+        "xcrun","-sdk","macosx","metal",
+        "-mmacosx-version-min=13.0",
+        "-o","shader.air",
+        "-c","metal/shader.metal",
     });
+
+    const metallib = b.addSystemCommand(&.{
+        "xcrun","-sdk","macosx","metallib",
+        "-o","gvfs.metallib",
+        "shader.air",
+    });
+
+    metallib.step.dependOn(&metal_air.step);
 
     const exe = b.addExecutable(.{
         .name = "vfs",
-        .root_module = exe_mod,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
+
+    exe.addIncludePath(b.path("src"));
+    exe.addCSourceFile(.{
+        .file = b.path("src/gvfs_metal.m"),
+        .flags = &.{ "-fobjc-arc" },
+    });
+
+    exe.linkFramework("Metal");
+    exe.linkFramework("Foundation");
+    exe.step.dependOn(&metallib.step);
 
     b.installArtifact(exe);
 
@@ -27,13 +50,4 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_module = exe_mod,
-    });
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
 }

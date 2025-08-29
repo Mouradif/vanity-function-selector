@@ -1,6 +1,7 @@
 const std = @import("std");
 const lib = @import("root.zig");
 const utils = @import("utils.zig");
+const C = @import("constants.zig");
 
 const VFSError = lib.VFSError;
 const BitMasks = lib.BitMasks;
@@ -12,8 +13,10 @@ const toStringWithMaxLength = utils.toStringWithMaxLength;
 const isHexString = utils.isHexString;
 const flattenArgs = utils.flattenArgs;
 
-const BUF_SIZE = 2049;
-const stdout = std.io.getStdOut().writer();
+const BUF_SIZE = 2048;
+var stdout_buffer: [BUF_SIZE]u8 = undefined;
+var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+const stdout = &stdout_writer.interface;
 
 fn usage() u8 {
     std.debug.print("Usage: vfs <pattern> <function-name> [...ARG_TYPE]\n\n", .{});
@@ -31,6 +34,7 @@ fn usage() u8 {
 
 fn print(comptime format: []const u8, args: anytype) void {
     stdout.print(format, args) catch {};
+    stdout.flush() catch {};
 }
 
 pub fn main() u8 {
@@ -54,8 +58,17 @@ pub fn main() u8 {
         args_str,
         pattern_str,
     });
+    var result_buf: [C.MAX_FQFN_LEN]u8 = undefined;
+    const gpu_res = lib.searchByPatternGPU(&result_buf, pattern, fct_name, args_str);
+    if (gpu_res) |r| {
+        print("Found (GPU) suffix: \"{s}\" after ~{d} attempts\n", .{ r.suffix, r.attempts });
+        print("0x{x:0>8}: {s}\n", .{ r.pattern, r.name });
+        return 0;
+    }
+
+    // Fallback to CPU
     const result = lib.searchByPattern(pattern, fct_name, args_str);
-    print("Found suffix: \"{s}\" after {d} attempts\n", .{ result.suffix, result.attempts});
+    print("Found (CPU) suffix: \"{s}\" after {d} attempts\n", .{ result.suffix, result.attempts });
     print("0x{x:0>8}: {s}\n", .{ result.pattern, result.name });
     return 0;
 }

@@ -75,7 +75,7 @@ fn keccakSelector(sig: []const u8) u32 {
 }
 
 fn makeFQFN(
-    buf: *[C.MAX_FQFN_LEN]u8,
+    buf: []u8,
     prefix: []const u8,
     suffix: []const u8,
     args: []const u8,
@@ -160,4 +160,51 @@ pub fn searchByPattern(
     }
 
     return result;
+}
+
+pub fn searchByPatternGPU(
+    buffer: []u8,
+    bit_mask: BitMasks,
+    prefix: []const u8,
+    args_str: []const u8,
+) ?Result {
+    const gpu = @import("gpu.zig");
+    var ctx = gpu.GpuCtx.init(null) catch return null; // tries ./gvfs.metallib
+    defer ctx.deinit();
+
+    const total = gpu.GpuCtx.totalSpace(C.ALPHABET.len, C.MAX_SUFFIX_LEN);
+    const batch: u64 = 1024 * 1024 * 8; // 8M per dispatch (tune this)
+    var start: u64 = 0;
+
+    var attempts: usize = 0;
+    var suffix_buf: [C.MAX_SUFFIX_LEN]u8 = undefined;
+
+    while (start < total) : (start += batch) {
+        const count = @min(batch, total - start);
+        const br = ctx.searchBatch(
+            prefix,
+            args_str,
+            C.ALPHABET,
+            bit_mask.must_be_one,
+            bit_mask.must_be_zero,
+            C.MAX_SUFFIX_LEN,
+            start, count,
+        ) catch return null;
+
+        attempts += @intCast(count);
+
+        if (br.found) {
+            const suffix = suffix_buf[0..br.suffix_len];
+            @memcpy(suffix, br.suffix[0..br.suffix_len]);
+
+            const fqfn = makeFQFN(buffer, prefix, suffix, args_str);
+            return .{
+                .pattern = br.selector,
+                .name = fqfn,
+                .suffix = suffix,
+                .attempts = attempts,
+            };
+        }
+    }
+    return null;
 }
