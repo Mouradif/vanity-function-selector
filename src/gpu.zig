@@ -1,6 +1,7 @@
 const GpuCtx = @This();
 
 const std = @import("std");
+const Constants = @import("constants.zig");
 const C = @cImport({
     @cInclude("gvfs_metal.h");
 });
@@ -26,7 +27,7 @@ pub fn totalSpace(alphabet_len: u32, max_suffix_len: u32) u64 {
 pub const BatchResult = struct {
     found: bool,
     selector: u32,
-    suffix: []u8,
+    suffix: [Constants.MAX_SUFFIX_LEN]u8,
     suffix_len: u32,
 };
 
@@ -54,14 +55,15 @@ pub fn searchBatch(
     );
     if (rc != 0) return error.GpuSearchFailed;
 
-    var suffix: [32]u8 = [_]u8{0} ** 32;
+    var suffix: [Constants.MAX_SUFFIX_LEN]u8 = [_]u8{0} ** Constants.MAX_SUFFIX_LEN;
     if (out.suffix_len > 0) {
-        @memcpy(suffix[0..@min(out.suffix_len, 32)], @as([*]const u8, @ptrCast(&out.suffix)));
+        const len = @min(out.suffix_len, Constants.MAX_SUFFIX_LEN);
+        @memcpy(suffix[0..len], @as([*]const u8, @ptrCast(&out.suffix))[0..len]);
     }
     return .{
         .found = (out.found != 0),
         .selector = out.selector,
-        .suffix = suffix[0..out.suffix_len],
+        .suffix = suffix,
         .suffix_len = out.suffix_len,
     };
 }

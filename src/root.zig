@@ -45,7 +45,7 @@ fn worker(
 ) void {
     var attempts: usize = 0;
     var counter: usize = id;
-    var suffix_buffer: [Constants.MAX_SUFFIX_LEN]u8 = undefined;
+    var suffix_buffer: [Constants.MAX_SUFFIX_LEN]u8 = [_]u8{0} ** Constants.MAX_SUFFIX_LEN;
 
     while (!stop.*) {
         var suffix_len: usize = 0;
@@ -141,18 +141,15 @@ pub fn searchByPatternGPU(
         attempts += @intCast(count);
 
         if (br.found) {
-            var suffix: [Constants.MAX_SUFFIX_LEN]u8 = undefined;
             const len = @min(Constants.MAX_SUFFIX_LEN, br.suffix_len);
-            @memcpy(suffix[0..len], br.suffix[0..len]);
-
             var name_buffer: [Constants.MAX_FQFN_LEN]u8 = undefined;
             var writer = std.Io.Writer.fixed(&name_buffer);
-            const name_len = try makeFQFN(&writer, prefix, br.suffix, args_str);
+            const name_len = try makeFQFN(&writer, prefix, br.suffix[0..len], args_str);
             return .{
                 .pattern = br.selector,
                 .name = name_buffer,
                 .name_len = name_len,
-                .suffix = suffix,
+                .suffix = br.suffix,
                 .suffix_len = br.suffix_len,
                 .attempts = attempts,
             };
