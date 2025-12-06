@@ -32,3 +32,23 @@ int gvfs_search_batch(
     uint64_t start_index, uint64_t batch_count,
     gvfs_result* out
 );
+
+// CREATE2 vanity address result
+typedef struct {
+  uint32_t found;         // 0/1
+  uint8_t  salt[32];      // 32-byte salt
+  uint8_t  address[20];   // 20-byte resulting address
+} create2_result;
+
+// Run a CREATE2 vanity address search batch on the GPU.
+// Returns 0 on success, nonzero on failure.
+int create2_search_batch(
+    gvfs_ctx* ctx,
+    const uint8_t deployer[20],
+    const uint8_t init_code_hash[32],
+    const uint32_t must_be_one[5],   // 160-bit mask as 5 x u32
+    const uint32_t must_be_zero[5],  // 160-bit mask as 5 x u32
+    uint64_t start_index,
+    uint64_t batch_count,
+    create2_result* out
+);

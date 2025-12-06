@@ -22,6 +22,23 @@ typedef struct {
     uint8_t  suffix[32];
 } SearchOut;
 
+// Must match shader.metal Create2In
+typedef struct {
+    uint32_t must_be_one[5];
+    uint32_t must_be_zero[5];
+    uint8_t  deployer[20];
+    uint8_t  init_code_hash[32];
+    uint64_t start_index;
+    uint64_t total_space;
+} Create2In;
+
+// Must match shader.metal Create2Out
+typedef struct {
+    _Atomic(uint32_t) found;
+    uint8_t salt[32];
+    uint8_t address[20];
+} Create2Out;
+
 struct gvfs_ctx {
     id<MTLDevice> device;
     id<MTLCommandQueue> queue;
@@ -152,6 +169,65 @@ int gvfs_search_batch(
             if (n > 32) n = 32;
             memcpy(out_c->suffix, out->suffix, n);
             if (n < 32) out_c->suffix[n] = 0;
+        }
+        return 0;
+    }
+}
+
+int create2_search_batch(
+    gvfs_ctx* ctx,
+    const uint8_t deployer[20],
+    const uint8_t init_code_hash[32],
+    const uint32_t must_be_one[5],
+    const uint32_t must_be_zero[5],
+    uint64_t start_index,
+    uint64_t batch_count,
+    create2_result* out_c
+) {
+    if (!ctx || !ctx->device || !ctx->pso || !ctx->queue) return -1;
+
+    @autoreleasepool {
+        id<MTLDevice> dev = ctx->device;
+
+        id<MTLBuffer> bIn  = [dev newBufferWithLength:sizeof(Create2In)  options:MTLResourceStorageModeShared];
+        id<MTLBuffer> bOut = [dev newBufferWithLength:sizeof(Create2Out) options:MTLResourceStorageModeShared];
+
+        Create2In *in = (Create2In*)bIn.contents;
+        Create2Out *out = (Create2Out*)bOut.contents;
+        memset(out, 0, sizeof(*out));
+
+        // Copy bit masks
+        memcpy(in->must_be_one, must_be_one, 5 * sizeof(uint32_t));
+        memcpy(in->must_be_zero, must_be_zero, 5 * sizeof(uint32_t));
+
+        // Copy deployer address and init code hash
+        memcpy(in->deployer, deployer, 20);
+        memcpy(in->init_code_hash, init_code_hash, 32);
+
+        in->start_index = start_index;
+        in->total_space = batch_count;
+
+        id<MTLCommandBuffer> cb = [ctx->queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+        [enc setComputePipelineState:ctx->pso];
+        [enc setBuffer:bIn  offset:0 atIndex:0];
+        [enc setBuffer:bOut offset:0 atIndex:1];
+
+        NSUInteger w = ctx->pso.threadExecutionWidth;
+        if (w == 0) w = 64;
+        NSUInteger tgCount = 256;
+        MTLSize tg   = MTLSizeMake(w, 1, 1);
+        MTLSize grid = MTLSizeMake(w * tgCount, 1, 1);
+
+        [enc dispatchThreads:grid threadsPerThreadgroup:tg];
+        [enc endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+
+        if (out_c) {
+            out_c->found = out->found;
+            memcpy(out_c->salt, out->salt, 32);
+            memcpy(out_c->address, out->address, 20);
         }
         return 0;
     }

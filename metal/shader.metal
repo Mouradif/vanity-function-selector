@@ -111,6 +111,21 @@ struct SearchOut {
     uchar suffix[32];
 };
 
+struct Create2In {
+    uint  must_be_one[5];      // 160-bit mask for address matching
+    uint  must_be_zero[5];     // 160-bit mask for address matching
+    uchar deployer[20];        // Deployer address (20 bytes)
+    uchar init_code_hash[32];  // Keccak256 of init code (32 bytes)
+    ulong start_index;         // Starting salt value
+    ulong total_space;         // Number of salts to check in this batch
+};
+
+struct Create2Out {
+    atomic_uint found;
+    uchar salt[32];            // The salt that produces the matching address
+    uchar address[20];         // The resulting address
+};
+
 kernel void vanity_selector(
     device const uchar*         prefix   [[buffer(0)]],
     device const uchar*         args     [[buffer(1)]],
@@ -171,6 +186,98 @@ kernel void vanity_selector(
                 out->suffix_len = L;
                 uint cpy = (L < 32u) ? L : 32u;
                 for (uint i = 0; i < cpy; ++i) out->suffix[i] = sig[head + i];
+            }
+            return;
+        }
+
+        counter += threads_per_grid;
+    }
+}
+
+kernel void vanity_create2(
+    device const Create2In&      cfg [[buffer(0)]],
+    device volatile Create2Out*  out [[buffer(1)]],
+    uint3 tid3 [[thread_position_in_grid]],
+    uint3 tpg3 [[threads_per_grid]]
+) {
+    if (atomic_load_explicit(&out->found, memory_order_relaxed) != 0) return;
+
+    ulong threads_per_grid = (ulong)tpg3.x * (ulong)tpg3.y * (ulong)tpg3.z;
+    ulong tid = (ulong)tid3.z * ((ulong)tpg3.x * (ulong)tpg3.y)
+              + (ulong)tid3.y * (ulong)tpg3.x
+              + (ulong)tid3.x;
+
+    // CREATE2 address calculation: keccak256(0xff ++ deployer ++ salt ++ init_code_hash)[12:]
+    thread uchar msg[85];  // 1 + 20 + 32 + 32 bytes
+    thread uchar hash[32];
+
+    // Fixed prefix: 0xff
+    msg[0] = 0xff;
+
+    // Deployer address (20 bytes)
+    for (uint i = 0; i < 20; ++i) {
+        msg[1 + i] = cfg.deployer[i];
+    }
+
+    // Init code hash (32 bytes) - constant for all iterations
+    for (uint i = 0; i < 32; ++i) {
+        msg[53 + i] = cfg.init_code_hash[i];
+    }
+
+    ulong counter = cfg.start_index + tid;
+    const ulong end = cfg.start_index + cfg.total_space;
+
+    while (counter < end) {
+        if (atomic_load_explicit(&out->found, memory_order_relaxed) != 0) return;
+
+        // Convert counter to 32-byte salt (big-endian u256)
+        // For simplicity, we use counter as the least significant 64 bits
+        for (uint i = 0; i < 24; ++i) msg[21 + i] = 0;  // Upper 24 bytes = 0
+        for (uint i = 0; i < 8; ++i) {
+            msg[21 + 24 + i] = (uchar)((counter >> (56 - i * 8)) & 0xFF);
+        }
+
+        // Compute keccak256
+        keccak256_eth(msg, 85, hash);
+
+        // Extract address (last 20 bytes of hash)
+        thread uchar addr[20];
+        for (uint i = 0; i < 20; ++i) {
+            addr[i] = hash[12 + i];
+        }
+
+        // Convert address to 5 x u32 words for pattern matching
+        uint addr_words[5];
+        for (uint i = 0; i < 5; ++i) {
+            addr_words[i] = ((uint)addr[i*4+0] << 24) |
+                           ((uint)addr[i*4+1] << 16) |
+                           ((uint)addr[i*4+2] << 8)  |
+                           ((uint)addr[i*4+3]);
+        }
+
+        // Check pattern match
+        bool match = true;
+        for (uint i = 0; i < 5; ++i) {
+            if ((addr_words[i] & cfg.must_be_one[i]) != cfg.must_be_one[i]) {
+                match = false;
+                break;
+            }
+            if ((addr_words[i] & cfg.must_be_zero[i]) != 0) {
+                match = false;
+                break;
+            }
+        }
+
+        if (match) {
+            if (atomic_exchange_explicit(&out->found, 1, memory_order_relaxed) == 0) {
+                // Store the salt (32 bytes)
+                for (uint i = 0; i < 32; ++i) {
+                    out->salt[i] = msg[21 + i];
+                }
+                // Store the address (20 bytes)
+                for (uint i = 0; i < 20; ++i) {
+                    out->address[i] = addr[i];
+                }
             }
             return;
         }
