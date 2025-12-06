@@ -1,7 +1,8 @@
 const std = @import("std");
-const utils = @import("utils.zig");
-const Constants = @import("constants.zig");
 const GpuCtx = @import("gpu.zig");
+
+pub const Utils = @import("utils.zig");
+pub const Constants = @import("constants.zig");
 
 pub const BitMasks = @import("bitmasks.zig");
 pub const VFSError = @import("errors.zig").VFSError;
@@ -133,7 +134,8 @@ pub fn searchByPatternGPU(
             bit_mask.must_be_one,
             bit_mask.must_be_zero,
             Constants.MAX_SUFFIX_LEN,
-            start, count,
+            start,
+            count,
         );
 
         attempts += @intCast(count);

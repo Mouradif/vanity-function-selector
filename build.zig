@@ -4,20 +4,38 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const clean = b.addSystemCommand(&.{ "rm", "-f", "shader.air", "gvfs.metallib" });
     const metal_air = b.addSystemCommand(&.{
-        "xcrun","-sdk","macosx","metal",
+        "xcrun",
+        "-sdk",
+        "macosx",
+        "metal",
         "-mmacosx-version-min=13.0",
-        "-o","shader.air",
-        "-c","metal/shader.metal",
+        "-o",
+        "shader.air",
+        "-c",
+        "metal/shader.metal",
     });
 
+    metal_air.step.dependOn(&clean.step);
+
     const metallib = b.addSystemCommand(&.{
-        "xcrun","-sdk","macosx","metallib",
-        "-o","gvfs.metallib",
+        "xcrun",
+        "-sdk",
+        "macosx",
+        "metallib",
+        "-o",
+        "gvfs.metallib",
         "shader.air",
     });
 
     metallib.step.dependOn(&metal_air.step);
+
+    const mod = b.addModule("vfs", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     const exe = b.addExecutable(.{
         .name = "vfs",
@@ -25,17 +43,20 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "vfs", .module = mod },
+            },
         }),
     });
 
-    exe.addIncludePath(b.path("src"));
-    exe.addCSourceFile(.{
+    mod.addIncludePath(b.path("src"));
+    mod.addCSourceFile(.{
         .file = b.path("src/gvfs_metal.m"),
-        .flags = &.{ "-fobjc-arc" },
+        .flags = &.{"-fobjc-arc"},
     });
 
-    exe.linkFramework("Metal");
-    exe.linkFramework("Foundation");
+    mod.linkFramework("Metal", .{});
+    mod.linkFramework("Foundation", .{});
     exe.step.dependOn(&metallib.step);
 
     b.installArtifact(exe);
