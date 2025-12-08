@@ -22,12 +22,12 @@ fn usage() u8 {
     std.debug.print("  Examples:\n", .{});
     std.debug.print("    vfs selector 0xaa mint\n", .{});
     std.debug.print("    vfs selector 0xaaxxxxxx mint    # 'x' is wildcard\n", .{});
-    std.debug.print("    vfs selector 0xf0f0 bridge address address uint256\n\n", .{});
+    std.debug.print("    vfs selector 0xf00xxf00 bridge address address uint256\n\n", .{});
     std.debug.print("CREATE2 Mode:\n", .{});
     std.debug.print("  vfs create2 <pattern> <deployer-address> <init-code-hex>\n\n", .{});
     std.debug.print("  Examples:\n", .{});
-    std.debug.print("    vfs create2 0xdead 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb 0x60...\n", .{});
-    std.debug.print("    vfs create2 0x0000cafe 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb 0x60...\n\n", .{});
+    std.debug.print("    vfs create2 0xdead 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed 0x60...\n", .{});
+    std.debug.print("    vfs create2 0x0000cafe 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed 0x60...\n\n", .{});
     return 1;
 }
 
